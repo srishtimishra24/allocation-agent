@@ -338,7 +338,15 @@ class Orchestrator:
     # ---------------------------------------------------------- naive mode --
     async def _naive_recover(self, st: WorkflowState, failure: StageFailure) -> RunResult | None:
         """The strategy the brief warns against, implemented honestly so the
-        demo can show it losing rather than just assert that it would."""
+        demo can show it losing rather than just assert that it would.
+
+        Deliberately steelmanned: it honours the service's `retry_after` hint
+        before replaying. An earlier version replayed instantly, which meant it
+        lost every race against a time-based lock purely because it never
+        waited - a strawman. With the backoff, the *only* thing separating naive
+        from the policy agent is the scope of what it redoes, which is the
+        comparison this project is actually about.
+        """
         rounds = st.working.get("_naive_rounds", 0)
         if rounds >= 2:
             self.j.result("exhausted", st.units_spent)
@@ -346,8 +354,11 @@ class Orchestrator:
                              error=f"naive retry exhausted after {failure.code}",
                              decisions=self.decisions)
         st.working["_naive_rounds"] = rounds + 1
-        self.j.note("[naive] failure detected - discarding all artefacts and re-running the "
-                    "whole sequence")
+
+        wait = float(failure.detail.get("retry_after_seconds", 0.5))
+        self.j.note(f"[naive] backing off {wait}s, then discarding all artefacts and "
+                    f"re-running the whole sequence")
+        await asyncio.sleep(wait)
         spd = st.valid_artifact(Stage.SPEND)
         if spd:
             await self.tools.release_reservation(spd.ref)

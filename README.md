@@ -60,7 +60,7 @@ hold in order to start over. A process that was waiting on that pool takes
 
 ```
 FAIL bind LOCK_CONTENDED
-[naive] discarding all artefacts and re-running the whole sequence
+[naive] backing off 1.16s, then discarding all artefacts and re-running the whole sequence
 CALL spend POST /v1/reservations/res_b8dcfb7328:release
 CALL spend POST /v1/reservations
 FAIL spend BUDGET_EXHAUSTED: requested 60000, only 55000 available
@@ -71,6 +71,20 @@ RESULT EXHAUSTED  total 205 compute units
 whole argument for the project in one trace. The budget hold is not a variable
 you can reassign; releasing it is a bet on a shared resource, and the naive
 strategy makes that bet without knowing it is making one.
+
+**The baseline is deliberately steelmanned.** It honours the service's
+`retry_after` hint before replaying. My first version replayed instantly, which
+meant it lost every race against a time-based lock purely because it never
+waited — a strawman, and I only noticed when a counterfactual run didn't behave
+as I'd predicted. With the backoff in place, the *only* thing separating naive
+from the policy agent is the **scope of what it redoes**, which is the
+comparison this project is actually about.
+
+And the honest counterfactual, since "you rigged the pool" is the obvious
+challenge: set `predatory_drain_on_release` to `0` in `scenarios.py` and naive
+**succeeds** — at 150 units against 85. The concurrent grab changes the
+severity from "76% more expensive" to "allocation lost". It does not
+manufacture the failure.
 
 ### 2. Structural — retry can never work, and neither can the clever fix
 
