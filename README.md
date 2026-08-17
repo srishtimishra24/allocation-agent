@@ -12,7 +12,7 @@ looking at before it does anything.
 pip install -r requirements.txt
 
 ./run_demo.sh                          # everything: starts services, runs all 8 scenarios, tears down
-./run_demo.sh transient --compare      # the money shot: agent vs naive baseline, same world
+./run_demo.sh transient --compare      # side by side: agent vs naive baseline, same world
 pytest                                 # 61 tests, spawns its own service processes
 
 # or drive it by hand
@@ -299,7 +299,7 @@ Roughly in the order I think it matters.
 6. **Two thresholds are unprincipled.** `VALUE_OF_COMPLETION = 1000` and
    `HUMAN_REVIEW_COST = 250` set the escalation boundary between them, and I
    chose them by picking numbers that produced sensible behaviour on these
-   seven scenarios. That is fitting to the test set. They should come from
+   eight scenarios. That is fitting to the test set. They should come from
    what an allocation is actually worth and what an analyst's time actually
    costs.
 
@@ -309,7 +309,7 @@ Roughly in the order I think it matters.
   entirely and only one unit test failed — end-to-end behaviour was unchanged,
   because `targeted_retry` outscores `full_replay` anyway. That is defence in
   depth rather than wasted code, and I would keep both, but I do not want to
-  claim the veto layer is load-bearing in these seven scenarios when it mostly
+  claim the veto layer is load-bearing in these eight scenarios when it mostly
   is not. It becomes load-bearing the moment the cost model is wrong, which is
   exactly when you want it.
 

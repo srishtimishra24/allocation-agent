@@ -8,3 +8,4 @@ runs/
 .DS_Store
 .env
 *.egg-info/
+.vscode/
