@@ -12,7 +12,7 @@ in-process ASGI transports.
 
 **Why not:** the brief says "separate system with its own API". More
 practically, if bind trusts the receipt and reservation IDs it is handed, then
-the interesting failure — "the receipt you're holding was superseded" — cannot
+the interesting failure ("the receipt you're holding was superseded") cannot
 happen, and the naive-replay hazard becomes something I have to assert instead
 of demonstrate. Bind calling publish and spend over HTTP is what makes three
 of its five refusal codes possible at all.
@@ -29,8 +29,8 @@ rather than merely wasteful. Content is versioned; you cannot hold two live
 receipts for one allocation. So "re-publish then re-bind" invalidates the
 receipt another in-flight step may be checking.
 
-**Why it's fair:** it is a rule the service enforces for its own reasons —
-content versioning — not a tripwire added to make the agent look clever. Any
+**Why it's fair:** it is a rule the service enforces for its own reasons,
+content versioning, not a tripwire added to make the agent look clever. Any
 system with versioned artefacts behaves this way.
 
 ---
@@ -55,8 +55,8 @@ problem is only interesting when the undo isn't free.
 
 ## 4. Recovery plans do not execute stages
 
-A plan applies preparatory effects — change a parameter, amend a hold,
-invalidate one upstream artefact, wait — and hands control back to the main
+A plan applies preparatory effects (change a parameter, amend a hold,
+invalidate one upstream artefact, wait) and hands control back to the main
 loop, which runs whatever lacks a valid artefact.
 
 **Alternative:** each plan executes its own steps end to end.
@@ -75,7 +75,7 @@ abstraction is right.
 
 **Why not:** the two errors are not symmetric. Wrongly calling something
 transient produces an unbounded retry loop against a system that will never say
-yes — it burns compute, holds a reservation, and delays the escalation
+yes. It burns compute, holds a reservation, and delays the escalation
 indefinitely. Wrongly calling something structural produces one unnecessary
 escalation. Fail toward the recoverable mistake.
 
@@ -94,8 +94,8 @@ A vetoed plan scores `-inf`. It cannot be chosen at any price.
 still override.
 
 **Why not:** the guardrails encode things that are *unsafe* or *impossible*,
-not things that are *expensive*. G7 says publish will refuse the request — no
-score should be able to buy past that. G2 says the money may not come back —
+not things that are *expensive*. G7 says publish will refuse the request, and no
+score should be able to buy past that. G2 says the money may not come back:
 that is a correctness property, not a cost. Mixing safety into the same scalar
 as cost is how cost-minimising systems eventually do something stupid for a
 small saving.
@@ -103,7 +103,7 @@ small saving.
 **Honest caveat:** in all eight scenarios, scoring alone would also avoid the
 full replay. I disabled G1 and end-to-end behaviour didn't change. The veto
 layer is defence in depth, and it becomes load-bearing precisely when the cost
-model is wrong — which is the situation it exists for. But I'm not going to
+model is wrong, which is the situation it exists for. But I'm not going to
 claim it's doing heavy lifting today.
 
 ---
@@ -120,7 +120,7 @@ you gave up and restarted is waste. A guardrail that cannot tell those apart
 blocks the plans it exists to promote.
 
 Worth noting this only surfaced because the enumeration includes plans the
-scorer would never pick — the bug was visible in the veto column before it
+scorer would never pick. The bug was visible in the veto column before it
 could affect a decision.
 
 ---
@@ -151,8 +151,8 @@ expected human response time:
 | cannot be stretched far enough | `UNWIND` | it will lapse anyway |
 
 The third is the interesting one. An expiring hold is not an asset. Releasing
-it early is strictly better for the organisation — the money returns to the
-pool where something else can use it — and we attach a replay plan so approval
+it early is strictly better for the organisation, because the money returns to
+the pool where something else can use it, and we attach a replay plan so approval
 doesn't mean starting from zero. Letting it rot preserves nothing and denies
 the budget to everyone else in the meantime.
 
@@ -186,7 +186,7 @@ do something the same system would refuse a human operator.
 **Why not make the model the planner:** this decision is a small optimisation
 over an enumerable option set with a well-specified objective. A deterministic
 scorer is reproducible, testable, free, and cannot be argued into releasing a
-budget hold. The model earns its place on the parts that aren't enumerable —
+budget hold. The model earns its place on the parts that aren't enumerable:
 unfamiliar failure codes, near-ties, writing an escalation a human can act on.
 
 Two tests with a fake planner cover both directions: a vetoed pick is overruled
@@ -201,7 +201,7 @@ should not depend on what the model says, and that is how I know it doesn't.
   escalation threshold. I picked them to produce sensible behaviour on these
   eight scenarios, which is fitting to the test set.
 - `p_success` values are priors I invented. They do real work comparing plans
-  and no work as calibrated forecasts — every plan that runs here succeeds.
+  and no work as calibrated forecasts. Every plan that runs here succeeds.
 - Stage costs 40/25/10 are plausible for a moderation-heavy pipeline but are
   not measured.
 

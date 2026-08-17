@@ -1,6 +1,6 @@
 # Allocation workflow agent
 
-A three-stage approval workflow — **publish → spend → bind** — across three
+A three-stage approval workflow (**publish → spend → bind**) across three
 independently failing HTTP services, plus an agent that recovers when a later
 stage rejects work the earlier stages already committed to.
 
@@ -22,7 +22,7 @@ python run_agent.py --scenario structural_escalate
 ./stop_services.sh
 ```
 
-Python 3.10+. No API key required — the default planner is deterministic and
+Python 3.10+. No API key required. The default planner is deterministic and
 runs fully offline.
 
 ---
@@ -37,7 +37,7 @@ runs fully offline.
 | `partial_replay` | `PUBLISH_TIER_MISMATCH` | replay publish, keep the hold | 125 | completed |
 | `hold_expired` | `RESERVATION_EXPIRED` | replay spend, keep the receipt | 110 | completed |
 | `structural_escalate` | `SLOT_CONFLICT`, only a pricier slot | escalate to budget owner | 75 | escalated |
-| `structural_escalate_approved` | same, human approves | amend hold, bind — no restart | 110 | completed |
+| `structural_escalate_approved` | same, human approves | amend hold, bind, no restart | 110 | completed |
 | `compound` | degraded, **then** `SLOT_CONFLICT` | retry bind, then change parameter | 95 | completed |
 | `budget_terminal` | `BUDGET_EXHAUSTED` on spend | escalate immediately | 65 | escalated |
 
@@ -48,7 +48,7 @@ number above is measured, not asserted: `runs/summary.json`.
 
 ## The two required failure modes
 
-### 1. Transient — targeted retry works, naive retry destroys the allocation
+### 1. Transient: targeted retry works, naive retry destroys the allocation
 
 Bind loses a race to a soft lock that expires in about a second. The agent
 retries bind alone: **85 units, completed.**
@@ -75,31 +75,31 @@ strategy makes that bet without knowing it is making one.
 **The baseline is deliberately steelmanned.** It honours the service's
 `retry_after` hint before replaying. My first version replayed instantly, which
 meant it lost every race against a time-based lock purely because it never
-waited — a strawman, and I only noticed when a counterfactual run didn't behave
+waited. That is a strawman, and I only noticed when a counterfactual run didn't behave
 as I'd predicted. With the backoff in place, the *only* thing separating naive
 from the policy agent is the **scope of what it redoes**, which is the
 comparison this project is actually about.
 
 And the honest counterfactual, since "you rigged the pool" is the obvious
 challenge: set `predatory_drain_on_release` to `0` in `scenarios.py` and naive
-**succeeds** — at 150 units against 85. The concurrent grab changes the
+**succeeds**, at 150 units against 85. The concurrent grab changes the
 severity from "76% more expensive" to "allocation lost". It does not
 manufacture the failure.
 
-### 2. Structural — retry can never work, and neither can the clever fix
+### 2. Structural: retry can never work, and neither can the clever fix
 
 Bind rejects because the 09:00 window was permanently committed by another
 allocation. 14:00 has gone the same way. The agent probes for alternatives and
 finds two, and rejects both **for different reasons**:
 
-- **11:00 at 72,000.** It could amend the existing hold from 60,000 — but +12,000
+- **11:00 at 72,000.** It could amend the existing hold from 60,000, but +12,000
   is +20%, and the spend service auto-approves only +10%. Guardrail G6 blocks it.
 - **16:00 at 60,000.** Same price, but bind requires a `certified` publish tier
   for that regulated window, and publish will refuse to certify without a
   compliance reference we do not have. Guardrail G7 catches this *before* making
   the call.
 
-So it escalates — after one bind attempt, having spent 75 units — with a
+So it escalates, after one bind attempt and 75 units spent, with a
 structured handoff naming the person who can actually unblock it:
 
 ```
@@ -113,7 +113,7 @@ ESCALATE to budget_owner: bind refused with SLOT_CONFLICT
 
 Note the routing. The failure code says `SLOT_CONFLICT`, which sounds like an
 engineering problem. The agent routes to the **budget owner** because it read
-the *veto on the blocked plan*, not the failure code — the thing standing in the
+the *veto on the blocked plan*, not the failure code. The thing standing in the
 way is a spend-authority limit. Routing off the error code would have paged the
 wrong person.
 
@@ -144,7 +144,7 @@ Two decisions here I would defend:
   and defer to it only for unknown 5xxs.
 
 **2. Enumerate and veto.** `agent/policy.py` builds every plan that is even
-arguably available — including the naive full replay — and runs them through
+arguably available, including the naive full replay, and runs them through
 seven hard constraints:
 
 | | Guardrail |
@@ -159,7 +159,7 @@ seven hard constraints:
 
 G1's exemption clause is the one that took a second pass to get right. My first
 version vetoed *any* re-execution of a valid stage, which killed
-`upgrade_tier_then_bind` — a plan whose entire purpose is to republish at a
+`upgrade_tier_then_bind`, a plan whose entire purpose is to republish at a
 higher tier. Republishing on purpose is targeted work; republishing because you
 gave up and restarted is waste. The guardrail has to tell those apart, so plans
 declare an `intentional_redo` set.
@@ -168,7 +168,7 @@ declare an `intentional_redo` set.
 Escalation is priced at 250 units of human attention, so it wins only when the
 autonomous options are genuinely poor. Retry confidence decays 15% per repeat
 attempt, so a "transient" failure that keeps recurring falls below the
-escalation threshold on its own — before G4's hard cap is reached. G4 is a
+escalation threshold on its own, before G4's hard cap is reached. G4 is a
 backstop, and there is a test asserting the scorer gives up first.
 
 Rejected plans stay in the log with their veto reasons, because "why didn't you
@@ -194,7 +194,7 @@ those checks rather than out of bind's own state.
 
 That matters because of one rule in the publish service: **issuing a receipt
 supersedes the previous one for that allocation.** Content is versioned. So
-"re-publish and then re-bind" is not idempotent — it invalidates the receipt
+"re-publish and then re-bind" is not idempotent. It invalidates the receipt
 another in-flight step may be holding. The architecture is what makes naive
 replay dangerous, not a flag I set to make the demo work.
 
@@ -216,7 +216,7 @@ I did not make the model the decision-maker, and I would argue against it. This
 recovery decision is a small optimisation over an enumerable option set. A
 deterministic scorer does that better: reproducible, testable, free, and it
 cannot be talked into releasing a budget hold. What a model adds is judgement
-on the parts that are not enumerable — reading an unfamiliar failure code,
+on the parts that are not enumerable: reading an unfamiliar failure code,
 breaking a near-tie for reasons the cost model does not capture, writing an
 escalation a human can act on.
 
@@ -249,8 +249,8 @@ tests/             61 tests; conftest spawns real service processes
 ```
 
 One structural choice worth flagging: **recovery plans never execute stages.** A
-plan applies preparatory effects — change a parameter, amend a hold, invalidate
-one upstream artefact, wait — and returns control to the main loop, which runs
+plan applies preparatory effects (change a parameter, amend a hold, invalidate
+one upstream artefact, wait) and returns control to the main loop, which runs
 whatever currently lacks a valid artefact. So there is exactly one code path
 that calls a stage. "Did the recovery actually skip the expensive work?" is
 answered by the artefact table, not by trusting two parallel implementations to
@@ -260,7 +260,7 @@ stay in agreement.
 
 ## Further reading
 
-[`docs/DECISIONS.md`](docs/DECISIONS.md) — every non-obvious choice with the
+[`docs/DECISIONS.md`](docs/DECISIONS.md). Every non-obvious choice with the
 alternative I rejected and why, including the ones I'd expect pushback on.
 
 ---
@@ -272,7 +272,7 @@ Roughly in the order I think it matters.
 1. **The cost model is asserted, not learned.** `publish=40, spend=25, bind=10`
    and `p_same_retry=0.85` are my numbers. The decisions are only as good as
    they are. The fix is to record outcomes per `(failure_code, plan)` pair and
-   update the priors from observed success rates — the taxonomy is already
+   update the priors from observed success rates. The taxonomy is already
    shaped for it, since `p_same_retry` is a single field per code. Until then,
    every number is a hypothesis wearing a decimal point.
 
@@ -306,7 +306,7 @@ Roughly in the order I think it matters.
 ### Things I know are imperfect
 
 - **The guardrails are partly redundant with the scorer.** I disabled G1
-  entirely and only one unit test failed — end-to-end behaviour was unchanged,
+  entirely and only one unit test failed. End-to-end behaviour was unchanged,
   because `targeted_retry` outscores `full_replay` anyway. That is defence in
   depth rather than wasted code, and I would keep both, but I do not want to
   claim the veto layer is load-bearing in these eight scenarios when it mostly
